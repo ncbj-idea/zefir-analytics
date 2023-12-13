@@ -1,0 +1,12 @@
+name,storage_type,min_device_nom_power,max_device_nom_power,example_tag,example_tag3
+H_STOR_DH,BIG_HEAT_STORAGE,,,False,False
+EE_STOR_MF_BASIC,BATTERY_EE,10.0,40.0,False,False
+EE_STOR_MF_GAS,BATTERY_EE,10.0,40.0,False,False
+EE_STOR_MF_HP,BATTERY_EE,3.0,3.0,True,False
+H_STOR_MF_HP,SMALL_HEAT_STORAGE,20.0,45.0,False,False
+EE_STOR_SF_GAS,BATTERY_EE,10.0,40.0,False,False
+EE_STOR_SF_HP,BATTERY_EE,20.0,45.0,False,False
+H_STOR_SF_HP,SMALL_HEAT_STORAGE,10.0,40.0,False,True
+EE_STOR_OS_BASIC,BATTERY_EE,30.0,30.0,False,True
+EE_STOR_OS_HP,BATTERY_EE,10.0,40.0,False,False
+H_STOR_OS_HP,SMALL_HEAT_STORAGE,30.0,30.0,False,False

@@ -1,0 +1,4 @@
+storage_type,load_efficiency,gen_efficiency,cycle_length,power_to_capacity,energy_type,energy_loss,build_time,life_time,power_utilization,example_t_tag_1
+SMALL_HEAT_STORAGE,0.88,0.92,24,5,HEAT,0.0,0,20,0.9,False
+BIG_HEAT_STORAGE,0.91,0.93,2190,10,HEAT,0.01,0,20,0.9,True
+BATTERY_EE,0.87,0.85,48,5,EE,0.02,0,20,,False
