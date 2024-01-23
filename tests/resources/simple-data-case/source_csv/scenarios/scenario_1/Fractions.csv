@@ -1,0 +1,7 @@
+technology_stack,aggregate,year,min_fraction,max_fraction,max_fraction_increase,max_fraction_decrease
+SF_COAL,SINGLE_FAMILY,1,1.0,1.0,1,1
+SF_COAL,SINGLE_FAMILY,2,1.0,1.0,1,1
+OS_BASIC,OFFICES_SHOPS,1,0.9,0.9,1,1
+OS_BASIC,OFFICES_SHOPS,2,0.4,0.4,1,1
+OS_BASIC,OFFICES_SHOPS,3,1.0,1.0,1,1
+OS_HP,OFFICES_SHOPS,2,0.6,0.6,1,1
