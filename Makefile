@@ -4,15 +4,14 @@ ifeq ($(OS),Windows_NT)
 else
     VENV_ACTIVATE := .venv/bin/activate
 endif
-PIP_INDEX := https://nexus.services.idea.edu.pl/repository/pypi-all/simple
 
 .PHONY: install lint unit test clean
 
 $(VENV_ACTIVATE): requirements.txt requirements-dev.txt .pre-commit-config.yaml
 	python3.11 -m venv .venv
 	. $(VENV_ACTIVATE) && pip install --upgrade pip \
-		&& pip install -U -r requirements.txt -i $(PIP_INDEX) \
-		&& pip install -U -r requirements-dev.txt -i $(PIP_INDEX)
+		&& pip install -U -r requirements.txt \
+		&& pip install -U -r requirements-dev.txt
 	. $(VENV_ACTIVATE) && pre-commit install
 
 install: $(VENV_ACTIVATE)

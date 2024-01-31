@@ -27,9 +27,13 @@ class LineParametersOverYearsQuery:
         self,
         network: Network,
         line_results: dict[str, dict[str, pd.DataFrame]],
+        hour_sample: np.ndarray,
+        hourly_scale: float,
     ) -> None:
         self._network = network
         self._line_results = line_results
+        self._hourly_scale = hourly_scale
+        self._hour_sample = hour_sample
 
     @property
     def line_names(self) -> list[str]:
@@ -45,18 +49,28 @@ class LineParametersOverYearsQuery:
         return df
 
     def _get_flow(self, line_name: str) -> pd.DataFrame:
-        return self._get_yearly_summary(
-            self._line_results["flow"][line_name], "Total energy volume", "sum"
+        return (
+            self._get_yearly_summary(
+                self._line_results["flow"][line_name], "Total energy volume", "sum"
+            )
+            * self._hourly_scale
         )
 
     def _get_transmission_fee(self, line_name: str) -> pd.DataFrame:
         df_flow = self._line_results["flow"][line_name]
         if tf_name := self._network.lines[line_name].transmission_fee:
-            series_tf = self._network.transmission_fees[tf_name].fee
-            df = df_flow * series_tf[df_flow.index].values[:, None]
+            series_tf = (
+                self._network.transmission_fees[tf_name]
+                .fee.iloc[self._hour_sample]
+                .reset_index(drop=True)
+            )
+            df = df_flow.mul(series_tf.values[:None], axis=0)
         else:
             df = df_flow * 0.0
-        return self._get_yearly_summary(df, "Transmission fee total cost", "sum")
+        return (
+            self._get_yearly_summary(df, "Transmission fee total cost", "sum")
+            * self._hourly_scale
+        )
 
     def get_flow(
         self, line_name: str | list[str] | None = None

@@ -23,6 +23,7 @@ from pyzefir.model.network import Network
 from pyzefir.parser.csv_parser import CsvParser
 from pyzefir.parser.network_creator import NetworkCreator
 from pyzefir.postprocessing.results_handler import GeneralResultDirectory
+from pyzefir.utils.config_parser import ConfigLoader, ConfigParams
 from pyzefir.utils.path_manager import CsvPathManager
 
 
@@ -102,18 +103,26 @@ class DataLoader:
         result_path: Path,
         scenario_name: str,
         parameters_path: ParametersPath,
+        config_path: Path,
     ) -> tuple[
         dict[str, dict[str, pd.DataFrame]],
         Network,
         dict[str, dict[str, dict[str, pd.DataFrame]]],
         dict[str, pd.Series],
+        ConfigParams,
     ]:
         source_data = cls._load_source_data(source_path, scenario_name)
         network = cls._create_network(source_data)
         result_data = cls._load_result_data(result_path)
         parameters = cls._load_parameters(parameters_path)
+        config = cls._load_config(config_path)
 
-        return source_data, network, result_data, parameters
+        return source_data, network, result_data, parameters, config
+
+    @staticmethod
+    def _load_config(config_path: Path) -> ConfigParams:
+        config = ConfigLoader(config_path).load()
+        return config
 
     @staticmethod
     def _load_source_data(

@@ -1,3 +1,3 @@
 numpy~=1.24.2
 pandas==2.0.1
-pyzefir==0.1.0
+pyzefir==0.2.1

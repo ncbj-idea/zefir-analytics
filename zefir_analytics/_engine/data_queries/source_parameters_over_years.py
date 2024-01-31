@@ -43,6 +43,8 @@ class SourceParametersOverYearsQuery:
         storage_results: dict[str, dict[str, pd.DataFrame]],
         year_sample: pd.Series,
         discount_rate: pd.Series,
+        hourly_scale: float,
+        hour_sample: np.ndarray,
     ):
         self._network = network
         self._generator_results = generator_results
@@ -54,6 +56,8 @@ class SourceParametersOverYearsQuery:
             self._generator_capacity_plus,
             self._storage_capacity_plus,
         ) = self._calculate_cap_plus()
+        self._hourly_scale = hourly_scale
+        self._hour_sample = hour_sample
 
     def _create_energy_source_type_mapping(self) -> dict[str, set[str]]:
         mapping = defaultdict(set)
@@ -196,7 +200,7 @@ class SourceParametersOverYearsQuery:
             [generator_generation_sum, storage_generation_sum], axis=1
         )
 
-        return generation_sum_df
+        return generation_sum_df * self._hourly_scale
 
     def get_generation_sum(
         self,
@@ -234,7 +238,7 @@ class SourceParametersOverYearsQuery:
         filter_names: list[str] | None = None,
     ) -> pd.DataFrame:
         generators, storages = self._filter_elements(filter_type, filter_names)
-        df = self._get_dump_energy_sum(generators, storages)
+        df = self._get_dump_energy_sum(generators, storages) * self._hourly_scale
         return self._aggregate_energy_sources(
             energy_source_df=df,
             column_name=YEARS_LABEL,
@@ -265,7 +269,7 @@ class SourceParametersOverYearsQuery:
         filter_names: list[str] | None = None,
     ) -> pd.DataFrame:
         generators, storages = self._filter_elements(filter_type, filter_names)
-        df = self._get_load_sum(generators, storages)
+        df = self._get_load_sum(generators, storages) * self._hourly_scale
         return self._aggregate_energy_sources(
             energy_source_df=df,
             column_name=YEARS_LABEL,
@@ -323,7 +327,12 @@ class SourceParametersOverYearsQuery:
                 continue
             dem_series_list = []
             for en_type, conv_en_rate in conversion_rates.items():
-                dem_series = generation_df.mul(conv_en_rate, axis=0).dropna().sum()
+                conv_en_rate_resampled = conv_en_rate.iloc[
+                    self._hour_sample
+                ].reset_index(drop=True)
+                dem_series = (
+                    generation_df.mul(conv_en_rate_resampled, axis=0).dropna().sum()
+                )
                 dem_series.name = en_type
                 dem_series_list.append(dem_series)
             dem_df = pd.concat(dem_series_list)
@@ -344,7 +353,7 @@ class SourceParametersOverYearsQuery:
         filter_names: list[str] | None = None,
     ) -> pd.DataFrame:
         generators, storages = self._filter_elements(filter_type, filter_names)
-        df = self._get_generation_demand(generators, storages)
+        df = self._get_generation_demand(generators, storages) * self._hourly_scale
         return self._aggregate_energy_sources(
             energy_source_df=df,
             column_name=YEARS_LABEL,
@@ -464,7 +473,7 @@ class SourceParametersOverYearsQuery:
             df = df.to_frame()
             multiindex = pd.MultiIndex.from_tuples([(generator, fuel_name)])
             df.columns = multiindex
-            df = df.stack().swaplevel().unstack()
+            df = df.stack().swaplevel().unstack() * self._hourly_scale
             dfs.append(df)
 
         return pd.concat(dfs, axis=1)

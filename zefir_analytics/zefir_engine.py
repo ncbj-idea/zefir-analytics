@@ -18,7 +18,9 @@ from pathlib import Path
 
 import pandas as pd
 from pyzefir.model.network import Network
+from pyzefir.optimization.opt_config import OptConfig
 from pyzefir.postprocessing.results_handler import GeneralResultDirectory
+from pyzefir.utils.config_parser import ConfigParams
 
 from zefir_analytics import _engine as _d
 
@@ -29,6 +31,7 @@ class ZefirEngine:
         source_path: Path,
         result_path: Path,
         scenario_name: str,
+        config_path: Path,
         parameter_path: Path | None = None,
         discount_rate_path: Path | None = None,
         year_sample_path: Path | None = None,
@@ -39,17 +42,24 @@ class ZefirEngine:
             self._network,
             self._result_dict,
             self._params,
+            self._config,
         ) = self._load_input_data(
-            source_path,
-            result_path,
-            scenario_name,
-            parameter_path,
-            discount_rate_path,
-            year_sample_path,
-            hour_sample_path,
+            source_path=source_path,
+            result_path=result_path,
+            scenario_name=scenario_name,
+            config_path=config_path,
+            parameter_path=parameter_path,
+            discount_rate_path=discount_rate_path,
+            year_sample_path=year_sample_path,
+            hour_sample_path=hour_sample_path,
         )
 
         self._scenario_name = scenario_name
+        self._opt_config = OptConfig(
+            hours=self._network.constants.n_hours,
+            years=self._network.constants.n_years,
+            hour_sample=self._params["hour_sample"].values,
+        )
 
         self._source_parameters_over_years = _d.SourceParametersOverYearsQuery(
             network=self.network,
@@ -59,11 +69,15 @@ class ZefirEngine:
             storage_results=self.result_dict[GeneralResultDirectory.STORAGES_RESULTS],
             year_sample=self._params["year_sample"],
             discount_rate=self._params["discount_rate"],
+            hourly_scale=self._opt_config.hourly_scale,
+            hour_sample=self._opt_config.hour_sample,
         )
 
         self._line_parameters_over_years = _d.LineParametersOverYearsQuery(
             network=self.network,
             line_results=self.result_dict[GeneralResultDirectory.LINES_RESULTS],
+            hourly_scale=self._opt_config.hourly_scale,
+            hour_sample=self._opt_config.hour_sample,
         )
 
         self._aggregated_consumer_parameters_over_years = (
@@ -124,6 +138,7 @@ class ZefirEngine:
         source_path: Path,
         result_path: Path,
         scenario_name: str,
+        config_path: Path,
         parameter_path: Path | None = None,
         discount_rate_path: Path | None = None,
         year_sample_path: Path | None = None,
@@ -133,6 +148,7 @@ class ZefirEngine:
         Network,
         dict[str, dict[str, dict[str, pd.DataFrame]]],
         dict[str, pd.Series],
+        ConfigParams,
     ]:
         parameters_path = _d.ParametersPath(
             parameter_path,
@@ -145,4 +161,5 @@ class ZefirEngine:
             result_path,
             scenario_name,
             parameters_path,
+            config_path,
         )

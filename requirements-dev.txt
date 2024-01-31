@@ -1,5 +1,5 @@
 pre-commit
-pytest~=7.4.2
+pytest==7.4.4
 flake8
 black
 pytest-cov~=4.1.0
