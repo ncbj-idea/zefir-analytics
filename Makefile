@@ -4,20 +4,20 @@ ifeq ($(OS),Windows_NT)
 else
     VENV_ACTIVATE := .venv/bin/activate
 endif
+CODE_DIRS := zefir_analytics tests
 
 .PHONY: install lint unit test clean
 
-$(VENV_ACTIVATE): requirements.txt requirements-dev.txt .pre-commit-config.yaml
+$(VENV_ACTIVATE): pyproject.toml .pre-commit-config.yaml
 	python3.11 -m venv .venv
 	. $(VENV_ACTIVATE) && pip install --upgrade pip \
-		&& pip install -U -r requirements.txt \
-		&& pip install -U -r requirements-dev.txt
-	. $(VENV_ACTIVATE) && pre-commit install
+		&& pip install -U .[dev] && pre-commit install
 
 install: $(VENV_ACTIVATE)
 
 lint: $(VENV_ACTIVATE)
-	. $(VENV_ACTIVATE) && black . && pylama -l mccabe,pycodestyle,pyflakes,radon,mypy zefir_analytics tests --async
+	. $(VENV_ACTIVATE) && black $(CODE_DIRS)  \
+		&& pylama -l mccabe,pycodestyle,pyflakes,radon,mypy $(CODE_DIRS) --async
 
 unit: $(VENV_ACTIVATE) lint
 	. $(VENV_ACTIVATE) && pytest -vvv tests/unit && tox -e fast_integration --skip-pkg-install

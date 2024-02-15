@@ -59,6 +59,7 @@ class ZefirEngine:
             hours=self._network.constants.n_hours,
             years=self._network.constants.n_years,
             hour_sample=self._params["hour_sample"].values,
+            use_hourly_scale=self._config.use_hourly_scale,
         )
 
         self._source_parameters_over_years = _d.SourceParametersOverYearsQuery(

@@ -45,7 +45,7 @@ class LineParametersOverYearsQuery:
     ) -> pd.DataFrame:
         df = df.agg(axis=0, func=operation).to_frame(column_name)
         df.index.name = YEARS_LABEL
-        df.index = df.index.astype(np.integer)
+        df.index = df.index.astype(int)
         return df
 
     def _get_flow(self, line_name: str) -> pd.DataFrame:
@@ -55,6 +55,12 @@ class LineParametersOverYearsQuery:
             )
             * self._hourly_scale
         )
+
+    def _get_flow_hourly(self, line_name: str) -> pd.DataFrame:
+        df = self._line_results["flow"][line_name]
+        df.columns = df.columns.astype(int)
+        df = df.rename_axis(YEARS_LABEL, axis="columns")
+        return df.T.stack().to_frame("Total energy volume")
 
     def _get_transmission_fee(self, line_name: str) -> pd.DataFrame:
         df_flow = self._line_results["flow"][line_name]
@@ -73,8 +79,18 @@ class LineParametersOverYearsQuery:
         )
 
     def get_flow(
-        self, line_name: str | list[str] | None = None
+        self,
+        line_name: str | list[str] | None = None,
+        is_hours_resolution: bool = False,
     ) -> pd.DataFrame | dict[str, pd.DataFrame]:
+        if is_hours_resolution:
+            return (
+                data_utils.argument_condition(line_name, self._get_flow_hourly)
+                if line_name is not None
+                else data_utils.argument_condition(
+                    self.line_names, self._get_flow_hourly
+                )
+            )
         return (
             data_utils.argument_condition(line_name, self._get_flow)
             if line_name is not None

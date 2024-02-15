@@ -96,3 +96,25 @@ def test_line_parameters_none(
     ze = zefir_engine
     assert_analytics_result([ze.line_params.get_flow()])
     assert_analytics_result([ze.line_params.get_transmission_fee()])
+
+
+def test_get_flow_lines_over_hours(
+    zefir_engine: ZefirEngine,
+    line_names: list[str | list[str]],
+) -> None:
+    ze = zefir_engine
+    zefir_results: list[pd.DataFrame] = []
+    for name in line_names:
+        zefir_results.append(
+            ze.line_params.get_flow(line_name=name, is_hours_resolution=True)
+        )
+    zefir_results.append(ze.line_params.get_flow(is_hours_resolution=True))
+    zefir_results = [
+        value
+        for element in zefir_results
+        if isinstance(element, dict)
+        for value in element.values()
+    ]
+    assert len(zefir_results)
+    assert all(not df.empty for df in zefir_results)
+    assert all("Hour" in index for df in zefir_results for index in [df.index.names])

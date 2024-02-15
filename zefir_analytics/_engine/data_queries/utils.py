@@ -35,7 +35,9 @@ def dict_filter(
     return (
         dictionary
         if keys is None
-        else dictionary[keys]
-        if isinstance(keys, str)
-        else {key: dictionary[key] for key in keys}
+        else (
+            dictionary[keys]
+            if isinstance(keys, str)
+            else {key: dictionary[key] for key in keys}
+        )
     )

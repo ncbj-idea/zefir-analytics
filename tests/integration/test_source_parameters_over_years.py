@@ -117,3 +117,60 @@ def test_cap_plus_calculation(zefir_engine: ZefirEngine) -> None:
             columns=["STOR_1", "STOR_2"],
         )
     )
+
+
+def test_source_parameters_over_years_and_hours(zefir_engine: ZefirEngine) -> None:
+    ze = zefir_engine
+    zefir_results_without_filters = [
+        ze.source_params.get_generation_sum(level="element", is_hours_resolution=True),
+        ze.source_params.get_dump_energy_sum(level="element", is_hours_resolution=True),
+        ze.source_params.get_load_sum(level="type", is_hours_resolution=True),
+        ze.source_params.get_generation_demand(
+            level="element", is_hours_resolution=True
+        ),
+        ze.source_params.get_fuel_usage(level="type", is_hours_resolution=True),
+        ze.source_params.get_emission(level="type", is_hours_resolution=True),
+    ]
+
+    zefir_results_with_filters = [
+        ze.source_params.get_generation_sum(
+            level="type",
+            filter_type="aggr",
+            filter_names=["MULTI_FAMILY"],
+            is_hours_resolution=True,
+        ),
+        ze.source_params.get_dump_energy_sum(
+            level="type",
+            filter_type="aggr",
+            filter_names=["MULTI_FAMILY"],
+            is_hours_resolution=True,
+        ),
+        ze.source_params.get_load_sum(
+            level="type",
+            filter_type="aggr",
+            filter_names=["MULTI_FAMILY"],
+            is_hours_resolution=True,
+        ),
+        ze.source_params.get_generation_demand(
+            level="type",
+            filter_type="aggr",
+            filter_names=["MULTI_FAMILY"],
+            is_hours_resolution=True,
+        ),
+        ze.source_params.get_fuel_usage(
+            level="type",
+            filter_type="aggr",
+            filter_names=["MULTI_FAMILY"],
+            is_hours_resolution=True,
+        ),
+        ze.source_params.get_emission(
+            level="type",
+            filter_type="aggr",
+            filter_names=["MULTI_FAMILY"],
+            is_hours_resolution=True,
+        ),
+    ]
+    zefir_results = zefir_results_with_filters + zefir_results_without_filters
+    assert len(zefir_results)
+    assert all(not df.empty for df in zefir_results)
+    assert all("Hour" in index for df in zefir_results for index in [df.index.names])
