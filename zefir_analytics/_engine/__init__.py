@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from zefir_analytics._engine.data_loader import DataLoader, ParametersPath
+from zefir_analytics._engine.data_loader import DataLoader
 from zefir_analytics._engine.data_queries.aggregated_consumer_parameters_over_years import (
     AggregatedConsumerParametersOverYearsQuery,
 )
@@ -30,7 +30,6 @@ from zefir_analytics._engine.data_queries.source_parameters_over_years import (
 
 __all__ = [
     "DataLoader",
-    "ParametersPath",
     "SourceParametersOverYearsQuery",
     "LineParametersOverYearsQuery",
     "AggregatedConsumerParametersOverYearsQuery",

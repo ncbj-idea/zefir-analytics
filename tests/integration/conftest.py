@@ -14,84 +14,71 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import configparser
-import tempfile
 from pathlib import Path
+from typing import Generator
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from tests.utils import get_resources
 from zefir_analytics import ZefirEngine
 
-data = get_resources("simple-data-case")
-parameters_path = data / "parameters"
-input_path = data / "source_csv"
+
+@pytest.fixture(scope="session")
+def data_path() -> Path:
+    return get_resources("simple-data-case")
 
 
-@pytest.fixture
-def output_path() -> Path:
-    """Temporary output directory."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        yield Path(temp_dir)
+@pytest.fixture(scope="session")
+def input_path(data_path: Path) -> Path:
+    return data_path / "source_csv"
 
 
-@pytest.fixture
-def config_parser(output_path: Path) -> configparser.ConfigParser:
-    """Simple configuration file for pipeline test run."""
-    config = configparser.ConfigParser()
-    config.read_dict(
-        {
-            "input": {
-                "input_path": str(input_path),
-                "input_format": "csv",
-                "scenario": "scenario_1",
-            },
-            "output": {
-                "output_path": str(output_path),
-                "sol_dump_path": str(output_path / "file.sol"),
-                "opt_logs_path": str(output_path / "file.log"),
-            },
-            "parameters": {
-                "hour_sample": str(parameters_path / "hour_sample.csv"),
-                "year_sample": str(parameters_path / "year_sample.csv"),
-                "discount_rate": str(parameters_path / "discount_rate.csv"),
-            },
-            "optimization": {
-                "binary_fraction": False,
-                "money_scale": 100.0,
-                "ens": False,
-                "use_hourly_scale": True,
-            },
-        }
+@pytest.fixture(scope="session")
+def parameters_path(data_path: Path) -> Path:
+    return data_path / "parameters"
+
+
+@pytest.fixture(scope="session")
+def results_path(data_path: Path) -> Path:
+    return data_path / "results"
+
+
+@pytest.fixture(scope="session")
+def parameters(parameters_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    year_sample: np.ndarray = (
+        pd.read_csv(parameters_path / "year_sample.csv", header=None)
+        .squeeze()
+        .to_numpy()
     )
-    return config
-
-
-@pytest.fixture
-def config_ini_path(config_parser: configparser.ConfigParser) -> Path:
-    """Create *.ini file."""
-    with tempfile.NamedTemporaryFile(
-        mode="w+", suffix=".ini", delete=False
-    ) as temp_file:
-        yield Path(temp_file.name)
-
-
-def set_up_config_ini(path: Path, config_parser: configparser.ConfigParser) -> None:
-    with open(path, mode="w") as file_handler:
-        config_parser.write(file_handler)
+    hour_sample: np.ndarray = (
+        pd.read_csv(parameters_path / "hour_sample.csv", header=None)
+        .squeeze()
+        .to_numpy()
+    )
+    discount_rate: np.ndarray = (
+        pd.read_csv(parameters_path / "discount_rate.csv", header=None)
+        .squeeze()
+        .to_numpy()
+    )
+    return year_sample, hour_sample, discount_rate
 
 
 @pytest.fixture
 def zefir_engine(
-    config_ini_path: Path,
-    config_parser: configparser.ConfigParser,
-) -> ZefirEngine:
-    set_up_config_ini(config_ini_path, config_parser)
+    input_path: Path,
+    results_path: Path,
+    parameters: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> Generator[ZefirEngine, None, None]:
+    year_sample, hour_sample, discount_rate = parameters
     ze = ZefirEngine(
         source_path=input_path,
-        result_path=data / "results",
+        result_path=results_path,
         scenario_name="scenario_1",
-        parameter_path=data / "parameters",
-        config_path=config_ini_path,
+        year_sample=year_sample,
+        hour_sample=hour_sample,
+        discount_rate=discount_rate,
+        used_hourly_scale=True,
     )
     yield ze
