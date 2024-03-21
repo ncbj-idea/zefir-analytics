@@ -15,12 +15,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from pathlib import Path
+from typing import Self
 
+import numpy as np
 import pandas as pd
 from pyzefir.model.network import Network
 from pyzefir.optimization.opt_config import OptConfig
 from pyzefir.postprocessing.results_handler import GeneralResultDirectory
-from pyzefir.utils.config_parser import ConfigParams
+from pyzefir.utils.config_parser import ConfigLoader
 
 from zefir_analytics import _engine as _d
 
@@ -31,35 +33,35 @@ class ZefirEngine:
         source_path: Path,
         result_path: Path,
         scenario_name: str,
-        config_path: Path,
-        parameter_path: Path | None = None,
-        discount_rate_path: Path | None = None,
-        year_sample_path: Path | None = None,
-        hour_sample_path: Path | None = None,
+        discount_rate: np.ndarray[float],
+        year_sample: np.ndarray[int],
+        hour_sample: np.ndarray[int],
+        used_hourly_scale: bool,
     ) -> None:
+        self._scenario_name = scenario_name
+        self._year_sample = self._validate_parameter_array(
+            year_sample, np.int64, "year_sample"
+        )
+        self._hour_sample = self._validate_parameter_array(
+            hour_sample, np.int64, "hour_sample"
+        )
+        self._discount_rate = self._validate_parameter_array(
+            discount_rate, np.float64, "discount_rate"
+        )
         (
             self._source_dict,
             self._network,
             self._result_dict,
-            self._params,
-            self._config,
         ) = self._load_input_data(
             source_path=source_path,
             result_path=result_path,
             scenario_name=scenario_name,
-            config_path=config_path,
-            parameter_path=parameter_path,
-            discount_rate_path=discount_rate_path,
-            year_sample_path=year_sample_path,
-            hour_sample_path=hour_sample_path,
         )
-
-        self._scenario_name = scenario_name
         self._opt_config = OptConfig(
             hours=self._network.constants.n_hours,
             years=self._network.constants.n_years,
-            hour_sample=self._params["hour_sample"].values,
-            use_hourly_scale=self._config.use_hourly_scale,
+            hour_sample=self._hour_sample,
+            use_hourly_scale=used_hourly_scale,
         )
 
         self._source_parameters_over_years = _d.SourceParametersOverYearsQuery(
@@ -68,8 +70,8 @@ class ZefirEngine:
                 GeneralResultDirectory.GENERATORS_RESULTS
             ],
             storage_results=self.result_dict[GeneralResultDirectory.STORAGES_RESULTS],
-            year_sample=self._params["year_sample"],
-            discount_rate=self._params["discount_rate"],
+            year_sample=self._year_sample,
+            discount_rate=self._discount_rate,
             hourly_scale=self._opt_config.hourly_scale,
             hour_sample=self._opt_config.hour_sample,
         )
@@ -98,6 +100,19 @@ class ZefirEngine:
                 GeneralResultDirectory.GENERATORS_RESULTS
             ],
             storage_results=self.result_dict[GeneralResultDirectory.STORAGES_RESULTS],
+        )
+
+    @classmethod
+    def create_from_config(cls, config_path: Path) -> Self:
+        config = ConfigLoader(config_path).load()
+        return cls(
+            source_path=config.input_path,
+            result_path=config.output_path,
+            scenario_name=config.scenario,
+            discount_rate=config.discount_rate,
+            year_sample=config.year_sample,
+            hour_sample=config.hour_sample,
+            used_hourly_scale=config.use_hourly_scale,
         )
 
     @property
@@ -139,28 +154,25 @@ class ZefirEngine:
         source_path: Path,
         result_path: Path,
         scenario_name: str,
-        config_path: Path,
-        parameter_path: Path | None = None,
-        discount_rate_path: Path | None = None,
-        year_sample_path: Path | None = None,
-        hour_sample_path: Path | None = None,
     ) -> tuple[
         dict[str, dict[str, pd.DataFrame]],
         Network,
         dict[str, dict[str, dict[str, pd.DataFrame]]],
-        dict[str, pd.Series],
-        ConfigParams,
     ]:
-        parameters_path = _d.ParametersPath(
-            parameter_path,
-            discount_rate_path,
-            year_sample_path,
-            hour_sample_path,
-        )
         return _d.DataLoader.load_data(
             source_path,
             result_path,
             scenario_name,
-            parameters_path,
-            config_path,
         )
+
+    @staticmethod
+    def _validate_parameter_array(
+        array: np.ndarray, dtype: type, attr_name: str
+    ) -> np.ndarray:
+        if not isinstance(array, np.ndarray):
+            raise TypeError(f"Array {attr_name} must be a numpy array")
+        if array.dtype != dtype:
+            raise TypeError(
+                f"Elements of the array {attr_name} must be of type {dtype.__name__}"
+            )
+        return array

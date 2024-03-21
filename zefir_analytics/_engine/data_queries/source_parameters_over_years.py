@@ -442,13 +442,17 @@ class SourceParametersOverYearsQuery:
             ].energy_source_type
             opex = self._network.generator_types[generator_type_name].opex
             generator_df.loc[:, generator_name] = (
-                generator_df[generator_name] * opex[self._year_sample].values
+                (generator_df[generator_name] * opex[self._year_sample].values)
+                if self._year_sample is not None
+                else generator_df[generator_name] * opex.values
             )
         for storage_name in storage_df.columns:
             storage_type_name = self._network.storages[storage_name].energy_source_type
             opex = self._network.storage_types[storage_type_name].opex
             storage_df.loc[:, storage_name] = (
-                storage_df[storage_name] * opex[self._year_sample].values
+                (storage_df[storage_name] * opex[self._year_sample].values)
+                if self._year_sample is not None
+                else storage_df[storage_name] * opex.values
             )
         return pd.concat([generator_df, storage_df], axis=1)
 
