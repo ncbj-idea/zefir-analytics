@@ -41,3 +41,9 @@ def dict_filter(
             else {key: dictionary[key] for key in keys}
         )
     )
+
+
+def assign_multiindex(df: pd.DataFrame, label: str) -> pd.DataFrame:
+    if not df.empty:
+        df.columns = pd.MultiIndex.from_tuples([(col, label) for col in df.columns])
+    return df

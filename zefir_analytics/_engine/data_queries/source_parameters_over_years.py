@@ -15,7 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from collections import defaultdict
-from typing import Any, Literal
+from typing import Any, Iterable, Literal
 
 import numpy as np
 import pandas as pd
@@ -31,6 +31,7 @@ from zefir_analytics._engine.constants import (
     NETWORK_ELEMENT_TYPE,
     YEARS_LABEL,
 )
+from zefir_analytics._engine.data_queries.utils import assign_multiindex
 
 source_parameter_levels = Literal["element", "type"]
 source_parameter_filter_types = Literal["bus", "stack", "aggr"]
@@ -42,6 +43,7 @@ class SourceParametersOverYearsQuery:
         network: Network,
         generator_results: dict[str, dict[str, pd.DataFrame]],
         storage_results: dict[str, dict[str, pd.DataFrame]],
+        bus_results: dict[str, dict[str, pd.DataFrame]],
         year_sample: pd.Series,
         discount_rate: pd.Series,
         hourly_scale: float,
@@ -50,6 +52,7 @@ class SourceParametersOverYearsQuery:
         self._network = network
         self._generator_results = generator_results
         self._storage_results = storage_results
+        self._bus_results = bus_results
         self._year_sample = year_sample
         self._discount_rate = discount_rate
         self._energy_source_type_mapping = self._create_energy_source_type_mapping()
@@ -59,6 +62,72 @@ class SourceParametersOverYearsQuery:
         ) = self._calculate_cap_plus()
         self._hourly_scale = hourly_scale
         self._hour_sample = hour_sample
+
+    def _get_generator_and_storage_from_set_of_buses(
+        self,
+        bus_set: set[str],
+    ) -> tuple[list[str], list[str]]:
+        generators = [
+            g.name
+            for g in self._network.generators.values()
+            if g.buses.intersection(bus_set)
+        ]
+        storages = [s.name for s in self._network.storages.values() if s.bus in bus_set]
+        return generators, storages
+
+    def _get_global_generators_and_storage(
+        self,
+    ) -> tuple[list[str], list[str]]:
+        all_buses_out = {
+            item
+            for stack in self._network.local_balancing_stacks.values()
+            for item in list(stack.buses_out.values())
+        }
+        all_global_buses = set(self._network.buses).difference(all_buses_out)
+        return self._get_generator_and_storage_from_set_of_buses(all_global_buses)
+
+    def _get_generator_results(
+        self,
+        results_group: str,
+        generators: list[str],
+        is_hours_resolution: bool,
+    ) -> pd.DataFrame:
+        generator_dfs = self._generator_results[results_group]
+        generator_dfs = {
+            gen_name: (
+                df.pivot(columns=ENERGY_TYPE_LABEL).stack()
+                if is_hours_resolution
+                else df.pivot(columns=ENERGY_TYPE_LABEL).stack().groupby(level=1).sum()
+            )
+            for gen_name, df in generator_dfs.items()
+            if gen_name in generators
+        }
+        return pd.concat(generator_dfs, axis=1)
+
+    def _get_storage_results(
+        self,
+        results_group: str,
+        storages: list[str],
+        is_hours_resolution: bool,
+    ) -> pd.DataFrame:
+        storage_dfs = self._storage_results[results_group]
+
+        storage_dfs = {
+            storage_name: df if is_hours_resolution else df.sum()
+            for storage_name, df in storage_dfs.items()
+            if storage_name in storages
+        }
+        for storage_name, df in storage_dfs.items():
+            storage_type = self._network.storages[storage_name].energy_source_type
+            energy_type = self._network.storage_types[storage_type].energy_type
+            if is_hours_resolution:
+                df = df.set_index(df.index.map(lambda x: (x, energy_type)))
+                df.index.names = [HOUR_LABEL, ENERGY_TYPE_LABEL]
+            else:
+                df = df.to_frame().T
+                df.index = [energy_type]
+            storage_dfs[storage_name] = df
+        return pd.concat(storage_dfs, axis=1).fillna(0.0)
 
     def _create_energy_source_type_mapping(self) -> dict[str, set[str]]:
         mapping = defaultdict(set)
@@ -103,14 +172,14 @@ class SourceParametersOverYearsQuery:
 
         energy_source_df = energy_source_df.T.sort_index()
 
-        if is_hours_resolution:
-            return energy_source_df.stack(level=0)
-
         energy_source_df.index = energy_source_df.index.set_levels(
             energy_source_df.index.get_level_values(1).astype(int),
             level=1,
             verify_integrity=False,
         )
+        if is_hours_resolution:
+            return energy_source_df.stack(level=0)
+
         return energy_source_df
 
     @staticmethod
@@ -145,77 +214,49 @@ class SourceParametersOverYearsQuery:
         self,
         filter_type: source_parameter_filter_types | None = None,
         filter_names: list[str] | None = None,
-    ) -> tuple[list[str], list[str]]:
+        is_bus_filter: bool = False,
+    ) -> tuple[list[str], ...]:
         generators = list(self._network.generators.keys())
         storages = list(self._network.storages.keys())
 
         if filter_type is None or filter_names is None:
+            if is_bus_filter:
+                return generators, storages, list(self._network.buses.keys())
             return generators, storages
 
-        available_buses, available_stacks = filter_names, filter_names
+        available_buses, available_stacks = set(filter_names), set(filter_names)
         if filter_type == "aggr":
-            available_stacks_2d = [
+            available_stacks_2d: list[list[str]] = [
                 list(aggr.stack_base_fraction.keys())
                 for aggr in self._network.aggregated_consumers.values()
                 if aggr.name in filter_names
             ]
-            available_stacks = self._flatten_2d_list(available_stacks_2d)
+            available_stacks = set(self._flatten_2d_list(available_stacks_2d))
         if filter_type in ["stack", "aggr"]:
-            available_buses_2d = [
+            available_buses_2d: list[list[str]] = [
                 list(stack.buses_out.values())
                 for stack in self._network.local_balancing_stacks.values()
                 if stack.name in available_stacks
             ]
-            available_buses = self._flatten_2d_list(available_buses_2d)
+            available_buses = set(self._flatten_2d_list(available_buses_2d))
 
-        generators = [
-            g
-            for g in generators
-            if self._network.generators[g].buses.intersection(available_buses)
-        ]
-        storages = [
-            s for s in storages if self._network.storages[s].bus in available_buses
-        ]
-
+        generators, storages = self._get_generator_and_storage_from_set_of_buses(
+            available_buses
+        )
+        if is_bus_filter:
+            return generators, storages, list(available_buses)
         return generators, storages
 
     def _get_generation_sum(
         self, generators: list[str], storages: list[str], is_hours_resolution: bool
     ) -> pd.DataFrame:
-        generator_dfs = self._generator_results["generation_per_energy_type"]
-        storage_dfs = self._storage_results["generation"]
-
-        generator_dfs = {
-            k: (
-                v.pivot(columns=ENERGY_TYPE_LABEL).stack()
-                if is_hours_resolution
-                else v.pivot(columns=ENERGY_TYPE_LABEL).stack().groupby(level=1).sum()
-            )
-            for k, v in generator_dfs.items()
-            if k in generators
-        }
-        storage_dfs = {
-            k: v if is_hours_resolution else v.sum()
-            for k, v in storage_dfs.items()
-            if k in storages
-        }
-
-        for storage_name, df in storage_dfs.items():
-            storage_type = self._network.storages[storage_name].energy_source_type
-            energy_type = self._network.storage_types[storage_type].energy_type
-            if is_hours_resolution:
-                df = df.set_index(df.index.map(lambda x: (x, energy_type)))
-                df.index.names = [HOUR_LABEL, ENERGY_TYPE_LABEL]
-            else:
-                df = df.to_frame().T
-                df.index = [energy_type]
-            storage_dfs[storage_name] = df
-
-        generator_generation_sum = pd.concat(generator_dfs, axis=1)
-        storage_generation_sum = pd.concat(storage_dfs, axis=1)
-        generation_sum_df = pd.concat(
-            [generator_generation_sum, storage_generation_sum], axis=1
+        generator_df = self._get_generator_results(
+            "generation_per_energy_type", generators, is_hours_resolution
         )
+        storage_df = self._get_storage_results(
+            "generation", storages, is_hours_resolution
+        )
+        generation_sum_df = pd.concat([generator_df, storage_df], axis=1)
 
         return generation_sum_df * self._hourly_scale
 
@@ -238,25 +279,6 @@ class SourceParametersOverYearsQuery:
             is_hours_resolution=is_hours_resolution,
         )
 
-    def _get_dump_energy_sum(
-        self,
-        generators: list[str],
-        _storages: list[str],
-        is_hours_resolution: bool = False,
-    ) -> pd.DataFrame:
-        generator_dfs = self._generator_results["dump_energy_per_energy_type"]
-        generator_dfs = {
-            k: (
-                v.pivot(columns=ENERGY_TYPE_LABEL).stack()
-                if is_hours_resolution
-                else v.pivot(columns=ENERGY_TYPE_LABEL).stack().groupby(level=1).sum()
-            )
-            for k, v in generator_dfs.items()
-            if k in generators
-        }
-        generator_sum = pd.concat(generator_dfs, axis=1)
-        return generator_sum
-
     def get_dump_energy_sum(
         self,
         level: source_parameter_levels,
@@ -264,9 +286,11 @@ class SourceParametersOverYearsQuery:
         filter_names: list[str] | None = None,
         is_hours_resolution: bool = False,
     ) -> pd.DataFrame:
-        generators, storages = self._filter_elements(filter_type, filter_names)
+        generators, _ = self._filter_elements(filter_type, filter_names)
         df = (
-            self._get_dump_energy_sum(generators, storages, is_hours_resolution)
+            self._get_generator_results(
+                "dump_energy_per_energy_type", generators, is_hours_resolution
+            )
             * self._hourly_scale
         )
         return self._aggregate_energy_sources(
@@ -279,32 +303,6 @@ class SourceParametersOverYearsQuery:
             is_hours_resolution=is_hours_resolution,
         )
 
-    def _get_load_sum(
-        self,
-        _generators: list[str],
-        storages: list[str],
-        is_hours_resolution: bool = False,
-    ) -> pd.DataFrame:
-        storage_dfs = self._storage_results["load"]
-        storage_dfs = {
-            k: v if is_hours_resolution else v.sum()
-            for k, v in storage_dfs.items()
-            if k in storages
-        }
-        for storage_name in storage_dfs.keys():
-            storage_type = self._network.storages[storage_name].energy_source_type
-            energy_type = self._network.storage_types[storage_type].energy_type
-            if is_hours_resolution:
-                df = storage_dfs[storage_name]
-                df = df.set_index(df.index.map(lambda x: (x, energy_type)))
-                df.index.names = [HOUR_LABEL, ENERGY_TYPE_LABEL]
-            else:
-                df = storage_dfs[storage_name].to_frame().T
-                df.index = [energy_type]
-            storage_dfs[storage_name] = df
-        storage_sum = pd.concat(storage_dfs, axis=1)
-        return storage_sum
-
     def get_load_sum(
         self,
         level: source_parameter_levels,
@@ -312,9 +310,9 @@ class SourceParametersOverYearsQuery:
         filter_names: list[str] | None = None,
         is_hours_resolution: bool = False,
     ) -> pd.DataFrame:
-        generators, storages = self._filter_elements(filter_type, filter_names)
+        _, storages = self._filter_elements(filter_type, filter_names)
         df = (
-            self._get_load_sum(generators, storages, is_hours_resolution)
+            self._get_storage_results("load", storages, is_hours_resolution)
             * self._hourly_scale
         )
         return self._aggregate_energy_sources(
@@ -430,7 +428,10 @@ class SourceParametersOverYearsQuery:
         )
 
     def _calculate_opex(
-        self, generators: list[str], storages: list[str]
+        self,
+        generators: list[str],
+        storages: list[str],
+        cast_to_energy_source_type: bool = False,
     ) -> pd.DataFrame:
         generator_df = self._generator_results["capacity"]["capacity"]
         storage_df = self._storage_results["capacity"]["capacity"]
@@ -454,6 +455,14 @@ class SourceParametersOverYearsQuery:
                 if self._year_sample is not None
                 else storage_df[storage_name] * opex.values
             )
+        if cast_to_energy_source_type:
+            generator_df = self._aggregate_by_type(
+                generator_df, self._energy_source_type_mapping
+            )
+            storage_df = self._aggregate_by_type(
+                storage_df, self._energy_source_type_mapping
+            )
+
         return pd.concat([generator_df, storage_df], axis=1)
 
     def _calculate_cap_plus(self) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -488,19 +497,14 @@ class SourceParametersOverYearsQuery:
 
         return gen_cap_plus_df, stor_cap_plus_df
 
-    def _get_capex_opex(
-        self, generators: list[str], storages: list[str]
+    @staticmethod
+    def _format_capex_opex_dfs(
+        capex_df: pd.DataFrame, opex_df: pd.DataFrame
     ) -> pd.DataFrame:
-        capex_df = self._generator_results["capex"]["capex"].join(
-            self._storage_results["capex"]["capex"]
-        )
-        opex_df = self._calculate_opex(generators, storages)
-        capex_df.columns = pd.MultiIndex.from_tuples(
-            [(col, "capex") for col in capex_df.columns]
-        )
-        opex_df.columns = pd.MultiIndex.from_tuples(
-            [(col, "opex") for col in opex_df.columns]
-        )
+        if capex_df.empty and opex_df.empty:
+            return pd.DataFrame()
+        capex_df = assign_multiindex(capex_df, "capex")
+        opex_df = assign_multiindex(opex_df, "opex")
         df = pd.concat([capex_df, opex_df], axis=1)
         df = df.reindex(
             columns=df.columns.get_level_values(0).sort_values().unique(), level=0
@@ -508,19 +512,82 @@ class SourceParametersOverYearsQuery:
         df = df.stack().swaplevel().unstack()
         return df
 
-    def get_capex_opex(
+    def _get_global_capex_opex(
         self,
-        level: source_parameter_levels,
-        filter_type: source_parameter_filter_types | None = None,
+        generators: list[str],
+        storages: list[str],
+    ) -> pd.DataFrame:
+        capex_df = self._generator_results["global_capex"]["global_capex"].join(
+            self._storage_results["global_capex"]["global_capex"]
+        )
+        capex_df = capex_df.loc[:, capex_df.columns.isin(generators + storages)]
+        opex_df = self._calculate_opex(generators, storages)
+        return self._format_capex_opex_dfs(capex_df, opex_df)
+
+    def _get_local_capex_opex(
+        self,
+        generators: list[str],
+        storages: list[str],
+        filter_type: Literal["aggr"] | None = None,
         filter_names: list[str] | None = None,
     ) -> pd.DataFrame:
-        generators, storages = self._filter_elements(filter_type, filter_names)
-        df = self._get_capex_opex(generators, storages)
+        if filter_type is not None and filter_names is not None:
+            generator_values = [
+                value
+                for key, value in self._generator_results["local_capex"].items()
+                if key in filter_names
+            ]
+            storage_values = [
+                value
+                for key, value in self._storage_results["local_capex"].items()
+                if key in filter_names
+            ]
+        else:
+            generator_values = list(self._generator_results["local_capex"].values())
+            storage_values = list(self._storage_results["local_capex"].values())
+
+        if not storage_values:
+            capex_df = pd.concat(generator_values, axis=0).groupby(level=0).sum()
+        else:
+            capex_df = (
+                pd.concat(generator_values, axis=0).groupby(level=0).sum()
+            ).join(pd.concat(storage_values, axis=0).groupby(level=0).sum())
+
+        opex_df = self._calculate_opex(
+            generators, storages, cast_to_energy_source_type=True
+        )
+        return self._format_capex_opex_dfs(capex_df, opex_df)
+
+    def get_global_capex_opex(
+        self,
+        level: source_parameter_levels,
+    ) -> pd.DataFrame:
+        generators, storages = self._get_global_generators_and_storage()
+        df = self._get_global_capex_opex(generators, storages)
         return self._aggregate_energy_sources(
             energy_source_df=df,
             column_name=YEARS_LABEL,
             index_name=COST_TYPE_LABEL,
             level=level,
+            filter_type=None,
+            filter_names=None,
+        )
+
+    def get_local_capex_opex(
+        self,
+        filter_type: Literal["aggr"] | None = None,
+        filter_names: list[str] | None = None,
+    ) -> pd.DataFrame:
+        generators, storages = self._filter_elements(filter_type, filter_names)
+        global_generators, global_storages = self._get_global_generators_and_storage()
+        generators = list(set(generators) - set(global_generators))
+        storages = list(set(storages) - set(global_storages))
+        df = self._get_local_capex_opex(generators, storages, filter_type, filter_names)
+        return self._aggregate_energy_sources(
+            energy_source_df=df,
+            column_name=YEARS_LABEL,
+            index_name=COST_TYPE_LABEL,
+            level="element",  # element coz data is already in type but when level=type func cast element-> type
             filter_type=filter_type,
             filter_names=filter_names,
         )
@@ -710,4 +777,163 @@ class SourceParametersOverYearsQuery:
             level=level,
             filter_type=filter_type,
             filter_names=filter_names,
+        )
+
+    def _get_data_per_unit(self, techs: Iterable, keys: list[str]) -> pd.DataFrame:
+        df_dict = {
+            key: pd.concat(
+                [getattr(t, key).to_frame(name=t.name) for t in techs], axis=1
+            )
+            for key in keys
+        }
+        df_dict = {
+            key: v.iloc[self._year_sample].unstack() for key, v in df_dict.items()
+        }
+        return pd.concat(df_dict, axis=1).T
+
+    def get_costs_per_tech_type(
+        self,
+        level: source_parameter_levels,
+        filter_type: source_parameter_filter_types | None = None,
+        filter_names: list[str] | None = None,
+    ) -> pd.DataFrame:
+        techs = list(self._network.generator_types.values()) + list(
+            self._network.storage_types.values()
+        )
+        df = self._get_data_per_unit(
+            techs=techs,
+            keys=["capex", "opex"],
+        )
+        return self._aggregate_energy_sources(
+            energy_source_df=df,
+            column_name=YEARS_LABEL,
+            index_name=COST_TYPE_LABEL,
+            level=level,
+            filter_type=filter_type,
+            filter_names=filter_names,
+        )
+
+    def get_fuel_cost_per_tech(
+        self,
+        level: source_parameter_levels,
+        filter_type: source_parameter_filter_types | None = None,
+        filter_names: list[str] | None = None,
+    ) -> pd.DataFrame:
+        fuels = self._network.fuels.values()
+        df = self._get_data_per_unit(techs=fuels, keys=["cost"])
+        return self._aggregate_energy_sources(
+            energy_source_df=df,
+            column_name=YEARS_LABEL,
+            index_name=FUEL_LABEL,
+            level=level,
+            filter_type=filter_type,
+            filter_names=filter_names,
+        )
+
+    def get_fuel_availability_per_tech(
+        self,
+        level: source_parameter_levels,
+        filter_type: source_parameter_filter_types | None = None,
+        filter_names: list[str] | None = None,
+    ) -> pd.DataFrame:
+        fuels = self._network.fuels.values()
+        df = self._get_data_per_unit(techs=fuels, keys=["availability"])
+        return self._aggregate_energy_sources(
+            energy_source_df=df,
+            column_name=YEARS_LABEL,
+            index_name=FUEL_LABEL,
+            level=level,
+            filter_type=filter_type,
+            filter_names=filter_names,
+        )
+
+    def get_ets_cost(
+        self,
+        level: source_parameter_levels,
+        filter_type: source_parameter_filter_types | None = None,
+        filter_names: list[str] | None = None,
+    ) -> pd.DataFrame:
+        emissions_df = self.get_emission(level="element")
+        filtered_gens_with_ets = {
+            key: obj.emission_fee
+            for key, obj in self._network.generators.items()
+            if obj.emission_fee
+        }
+        for gen_name, ets_names in filtered_gens_with_ets.items():
+            if gen_name not in emissions_df.index.get_level_values(0):
+                continue
+            for ets_name in ets_names:
+                ets = self._network.emission_fees[ets_name]
+                emissions_df.loc[gen_name, ets.emission_type] = (
+                    emissions_df.loc[gen_name, ets.emission_type]
+                    .mul(ets.price)
+                    .dropna()
+                    .values
+                )
+
+        return self._aggregate_energy_sources(
+            energy_source_df=emissions_df.T,
+            column_name=YEARS_LABEL,
+            index_name=EMISSION_LABEL,
+            level=level,
+            filter_type=filter_type,
+            filter_names=filter_names,
+        )
+
+    def get_ens(
+        self,
+        filter_type: source_parameter_filter_types | None = None,
+        filter_names: list[str] | None = None,
+        is_hours_resolution: bool = False,
+    ) -> pd.DataFrame:
+        *_, buses = self._filter_elements(filter_type, filter_names, is_bus_filter=True)
+        ens_df = self._get_ens(is_hours_resolution, buses) * self._hourly_scale
+        return self._aggregate_energy_sources(
+            energy_source_df=ens_df,
+            column_name=YEARS_LABEL,
+            index_name=ENERGY_TYPE_LABEL,
+            level="element",
+            filter_type=filter_type,
+            filter_names=filter_names,
+            is_hours_resolution=is_hours_resolution,
+        )
+
+    def _get_ens(self, is_hours_resolution: bool, buses: list[str]) -> pd.DataFrame:
+        ens_dfs = self._bus_results["generation_ens"]
+        ens_dfs = {
+            bus_name: df if is_hours_resolution else df.sum()
+            for bus_name, df in ens_dfs.items()
+            if bus_name in buses
+        }
+        for bus_name, ens_df in ens_dfs.items():
+            energy_type = self._network.buses[bus_name].energy_type
+            if is_hours_resolution:
+                ens_df = ens_df.set_index(ens_df.index.map(lambda x: (x, energy_type)))
+                ens_df.index.names = [HOUR_LABEL, ENERGY_TYPE_LABEL]
+            else:
+                ens_df = ens_df.to_frame().T
+                ens_df.index = [energy_type]
+            ens_dfs[bus_name] = ens_df
+        return pd.concat(ens_dfs, axis=1).fillna(0.0)
+
+    def get_state_of_charge(
+        self,
+        level: source_parameter_levels,
+        filter_type: source_parameter_filter_types | None = None,
+        filter_names: list[str] | None = None,
+        is_hours_resolution: bool = False,
+    ) -> pd.DataFrame:
+        _, storages = self._filter_elements(filter_type, filter_names)
+        soc_df = (
+            self._get_storage_results("state_of_charge", storages, is_hours_resolution)
+            * self._hourly_scale
+        )
+        return self._aggregate_energy_sources(
+            energy_source_df=soc_df,
+            column_name=YEARS_LABEL,
+            index_name=ENERGY_TYPE_LABEL,
+            level=level,
+            filter_type=filter_type,
+            filter_names=filter_names,
+            is_hours_resolution=is_hours_resolution,
         )

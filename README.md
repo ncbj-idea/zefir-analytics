@@ -46,23 +46,31 @@ make clean
 ```
 ## Available methods in Zefir Engine objects
 * source_params:
-  * get_generation_sum
-  * get_dump_energy_sum
-  * get_load_sum
-  * get_installed_capacity
-  * get_generation_demand
-  * get_fuel_usage
   * get_capex_opex
+  * get_costs_per_tech_type
+  * get_dump_energy_sum
   * get_emission
+  * get_ets_cost
+  * get_fuel_availability_per_tech
+  * get_fuel_cost
+  * get_fuel_cost_per_tech
+  * get_fuel_usage
+  * get_generation_demand
+  * get_generation_sum
+  * get_installed_capacity
+  * get_load_sum
+  * get_var_costs
 * aggregated_consumer_params:
+  * get_aggregate_elements_type_attachments
+  * get_aggregate_parameters
   * get_fractions
   * get_n_consumers
-  * get_yearly_energy_usage
   * get_total_yearly_energy_usage
-  * get_fractions
+  * get_yearly_energy_usage
 * lbs_params:
-  * get_lbs_fraction
   * get_lbs_capacity
+  * get_lbs_fraction
 * line_params:
+  * get_capacity
   * get_flow
   * get_transmission_fee

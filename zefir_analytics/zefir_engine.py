@@ -52,6 +52,7 @@ class ZefirEngine:
             self._source_dict,
             self._network,
             self._result_dict,
+            self._objective_func_value,
         ) = self._load_input_data(
             source_path=source_path,
             result_path=result_path,
@@ -70,6 +71,7 @@ class ZefirEngine:
                 GeneralResultDirectory.GENERATORS_RESULTS
             ],
             storage_results=self.result_dict[GeneralResultDirectory.STORAGES_RESULTS],
+            bus_results=self.result_dict[GeneralResultDirectory.BUS_RESULTS],
             year_sample=self._year_sample,
             discount_rate=self._discount_rate,
             hourly_scale=self._opt_config.hourly_scale,
@@ -105,9 +107,14 @@ class ZefirEngine:
     @classmethod
     def create_from_config(cls, config_path: Path) -> Self:
         config = ConfigLoader(config_path).load()
+        match config.input_format:
+            case "csv":
+                source_path = config.input_path
+            case "xlsx":
+                source_path = config.csv_dump_path
         return cls(
-            source_path=config.input_path,
-            result_path=config.output_path,
+            source_path=source_path,
+            result_path=config.output_path / "csv",
             scenario_name=config.scenario,
             discount_rate=config.discount_rate,
             year_sample=config.year_sample,
@@ -149,6 +156,10 @@ class ZefirEngine:
     def lbs_params(self) -> _d.LbsParametersOverYearsQuery:
         return self._variability_of_lbs
 
+    @property
+    def objective_function_value(self) -> float:
+        return self._objective_func_value
+
     @staticmethod
     def _load_input_data(
         source_path: Path,
@@ -158,6 +169,7 @@ class ZefirEngine:
         dict[str, dict[str, pd.DataFrame]],
         Network,
         dict[str, dict[str, dict[str, pd.DataFrame]]],
+        float,
     ]:
         return _d.DataLoader.load_data(
             source_path,

@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__version__ = "0.4.1"
+__version__ = "0.4.13"
 
 from zefir_analytics.zefir_engine import ZefirEngine
 
