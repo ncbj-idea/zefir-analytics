@@ -21,6 +21,18 @@ from zefir_analytics import ZefirEngine
 def test_aggregated_consumer_params_over_years(zefir_engine: ZefirEngine) -> None:
     ze = zefir_engine
     zefir_results_dataframe_res = [
+        ze.aggregated_consumer_params.get_aggregate_elements_type_attachments(),
+        ze.aggregated_consumer_params.get_aggregate_parameters(),
+        ze.aggregated_consumer_params.get_aggregate_elements_type_attachments(
+            ["MULTI_FAMILY", "SINGLE_FAMILY"]
+        ),
+        ze.aggregated_consumer_params.get_aggregate_parameters(
+            ["MULTI_FAMILY", "SINGLE_FAMILY"]
+        ),
+        ze.aggregated_consumer_params.get_aggregate_elements_type_attachments(
+            "MULTI_FAMILY"
+        ),
+        ze.aggregated_consumer_params.get_aggregate_parameters("MULTI_FAMILY"),
         ze.aggregated_consumer_params.get_fractions("MULTI_FAMILY"),
         ze.aggregated_consumer_params.get_n_consumers("MULTI_FAMILY"),
         ze.aggregated_consumer_params.get_yearly_energy_usage("SINGLE_FAMILY"),

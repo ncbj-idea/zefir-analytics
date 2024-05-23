@@ -74,7 +74,7 @@ def zefir_engine(
     year_sample, hour_sample, discount_rate = parameters
     ze = ZefirEngine(
         source_path=input_path,
-        result_path=results_path,
+        result_path=results_path / "csv",
         scenario_name="scenario_1",
         year_sample=year_sample,
         hour_sample=hour_sample,

@@ -50,7 +50,40 @@ def config_parser(
             "optimization": {
                 "binary_fraction": False,
                 "money_scale": 100.0,
-                "ens": False,
+                "use_hourly_scale": True,
+            },
+        }
+    )
+    return config
+
+
+@pytest.fixture
+def xlsx_config_parser(
+    input_path: Path,
+    results_path: Path,
+    parameters_path: Path,
+) -> configparser.ConfigParser:
+    """Simple configuration file for pipeline test run."""
+    config = configparser.ConfigParser()
+    config.read_dict(
+        {
+            "input": {
+                "input_path": str(input_path),
+                "input_format": "xlsx",
+                "scenario": "scenario_1",
+            },
+            "output": {
+                "output_path": str(results_path),
+                "csv_dump_path": str(input_path),
+            },
+            "parameters": {
+                "hour_sample": str(parameters_path / "hour_sample.csv"),
+                "year_sample": str(parameters_path / "year_sample.csv"),
+                "discount_rate": str(parameters_path / "discount_rate.csv"),
+            },
+            "optimization": {
+                "binary_fraction": False,
+                "money_scale": 100.0,
                 "use_hourly_scale": True,
             },
         }
@@ -68,11 +101,21 @@ def config_ini_path() -> Path:
 
 
 @pytest.fixture
-def zefir_engine_from_config(
+def zefir_engine_from_config_csv(
     config_ini_path: Path,
     config_parser: configparser.ConfigParser,
 ) -> ZefirEngine:
     set_up_config_ini(config_ini_path, config_parser)
+    ze = ZefirEngine.create_from_config(config_ini_path)
+    return ze
+
+
+@pytest.fixture
+def zefir_engine_from_config_xlsx(
+    config_ini_path: Path,
+    xlsx_config_parser: configparser.ConfigParser,
+) -> ZefirEngine:
+    set_up_config_ini(config_ini_path, xlsx_config_parser)
     ze = ZefirEngine.create_from_config(config_ini_path)
     return ze
 
@@ -83,9 +126,12 @@ def set_up_config_ini(path: Path, config_parser: configparser.ConfigParser) -> N
 
 
 def test_check_zefir_engines_creation_method(
-    zefir_engine_from_config: ZefirEngine, zefir_engine: ZefirEngine
+    zefir_engine_from_config_csv: ZefirEngine,
+    zefir_engine: ZefirEngine,
+    zefir_engine_from_config_xlsx: ZefirEngine,
 ) -> None:
-    zec = zefir_engine_from_config
+    zec = zefir_engine_from_config_csv
+    zee = zefir_engine_from_config_xlsx
     ze = zefir_engine
     ze_config_results = [
         ze.source_params.get_generation_sum(level="element"),
@@ -95,7 +141,7 @@ def test_check_zefir_engines_creation_method(
         ze.lbs_params.get_lbs_fraction("OS_HP"),
         ze.line_params.get_transmission_fee("DH -> MF_BASIC_H"),
     ]
-    ze_config_results = [
+    zec_config_results = [
         zec.source_params.get_generation_sum(level="element"),
         zec.source_params.get_emission(
             level="type", filter_type="aggr", filter_names=["MULTI_FAMILY"]
@@ -103,6 +149,23 @@ def test_check_zefir_engines_creation_method(
         zec.lbs_params.get_lbs_fraction("OS_HP"),
         zec.line_params.get_transmission_fee("DH -> MF_BASIC_H"),
     ]
+    assert (
+        ze.objective_function_value
+        == zec.objective_function_value
+        == zee.objective_function_value
+    )
+    zee_config_results = [
+        zee.source_params.get_generation_sum(level="element"),
+        zee.source_params.get_emission(
+            level="type", filter_type="aggr", filter_names=["MULTI_FAMILY"]
+        ),
+        zee.lbs_params.get_lbs_fraction("OS_HP"),
+        zee.line_params.get_transmission_fee("DH -> MF_BASIC_H"),
+    ]
 
-    for df_ze, df_zec in zip(ze_config_results, ze_config_results):
+    for df_ze, df_zec, df_zee in zip(
+        ze_config_results, zec_config_results, zee_config_results
+    ):
         assert_frame_equal(df_ze, df_zec)
+        assert_frame_equal(df_ze, df_zee)
+        assert_frame_equal(df_zec, df_zee)

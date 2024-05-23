@@ -24,6 +24,8 @@ from pyzefir.parser.network_creator import NetworkCreator
 from pyzefir.postprocessing.results_handler import GeneralResultDirectory
 from pyzefir.utils.path_manager import CsvPathManager
 
+from zefir_analytics._engine.constants import OBJECTIVE_FUNCTION_FILE_NAME
+
 
 class MissingParametersFileException(Exception):
     pass
@@ -40,12 +42,14 @@ class DataLoader:
         dict[str, dict[str, pd.DataFrame]],
         Network,
         dict[str, dict[str, dict[str, pd.DataFrame]]],
+        float,
     ]:
         source_data = cls._load_source_data(source_path, scenario_name)
         network = cls._create_network(source_data)
         result_data = cls._load_result_data(result_path)
+        objective_func_value = cls._load_objective_function_value(result_path)
 
-        return source_data, network, result_data
+        return source_data, network, result_data, objective_func_value
 
     @staticmethod
     def _load_source_data(
@@ -64,6 +68,12 @@ class DataLoader:
         return NetworkCreator.create(df_dict)
 
     @classmethod
+    def _load_objective_function_value(cls, result_path: Path) -> float:
+        return pd.read_csv(
+            result_path / OBJECTIVE_FUNCTION_FILE_NAME, index_col=0
+        ).squeeze()
+
+    @classmethod
     def _load_result_data(
         cls,
         result_path: Path,
@@ -76,11 +86,13 @@ class DataLoader:
             for data_category in group_path.glob("*"):
                 result_dict[group_str][data_category.stem] = dict()
                 for csv_file in data_category.glob("*.csv"):
-                    df = pd.read_csv(csv_file, index_col=0)
+                    objective_func_df = pd.read_csv(csv_file, index_col=0)
                     if group_str == GeneralResultDirectory.LINES_RESULTS:
                         result_dict[group_str][data_category.stem][
                             csv_file.stem.replace("-", "->")
-                        ] = df
+                        ] = objective_func_df
                     else:
-                        result_dict[group_str][data_category.stem][csv_file.stem] = df
+                        result_dict[group_str][data_category.stem][
+                            csv_file.stem
+                        ] = objective_func_df
         return result_dict

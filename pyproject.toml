@@ -23,7 +23,7 @@ classifiers = [
 dependencies = [
     "numpy~=1.24.2",
     "pandas==2.0.1",
-    "pyzefir==0.4.1"
+    "pyzefir==0.4.22"
 ]
 
 [project.optional-dependencies]
@@ -55,7 +55,7 @@ exclude_lines = [
 ]
 
 [tool.bumpversion]
-current_version = "0.4.1"
+current_version = "0.4.13"
 commit = true
 tag = false
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
@@ -88,12 +88,12 @@ legacy_tox_ini = """
 
     [testenv:unit]
     commands =
-            python -m pytest -vvv --cov-report term --cov-report xml:coverage.xml \
-             --cov=zefir_analytics --junitxml=report.xml tests/unit
+            python -m pytest -vvv tests/unit
 
     [testenv:fast_integration]
     commands =
-            python -m pytest -vvv -m "not long_test" tests/integration
+            python -m pytest -vvv -m "not long_test" --cov-report term --cov-report xml:coverage.xml \
+            --cov=zefir_analytics --junitxml=report.xml tests/integration
 
     [testenv:integration]
     commands =
