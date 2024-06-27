@@ -51,11 +51,11 @@ def test_source_parameters_over_years(zefir_engine: ZefirEngine) -> None:
         ze.source_params.get_state_of_charge(
             level="type", filter_type="aggr", filter_names=["MULTI_FAMILY"]
         ),
-        ze.source_params.get_costs_per_tech_type(level="element", filter_type="aggr"),
-        ze.source_params.get_fuel_cost_per_tech(level="element", filter_type="aggr"),
-        ze.source_params.get_fuel_availability_per_tech(
+        ze.source_params.get_network_costs_per_tech_type(
             level="element", filter_type="aggr"
         ),
+        ze.source_params.get_network_fuel_cost(),
+        ze.source_params.get_network_fuel_availability(),
         ze.source_params.get_ets_cost(
             level="type", filter_type="aggr", filter_names=["MULTI_FAMILY"]
         ),

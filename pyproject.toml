@@ -23,7 +23,7 @@ classifiers = [
 dependencies = [
     "numpy~=1.24.2",
     "pandas==2.0.1",
-    "pyzefir==0.4.22"
+    "pyzefir==0.4.30",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +35,7 @@ dev = [
     "pytest-cov~=4.1.0",
     "pytest-mock~=3.11.1",
     "pytest-lazy-fixture~=0.6.3",
+    "pytest-xdist~=3.5.0",
     "pylama[mccabe,pycodestyle,pyflakes,radon,mypy,toml]",
     "tox",
 ]
@@ -55,7 +56,7 @@ exclude_lines = [
 ]
 
 [tool.bumpversion]
-current_version = "0.4.13"
+current_version = "0.4.17"
 commit = true
 tag = false
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
@@ -105,7 +106,7 @@ legacy_tox_ini = """
 """
 
 [tool.pytest.ini_options]
-addopts = "--cov-report term --cov-report xml:coverage.xml"
+addopts = "--cov-report term --cov-report xml:coverage.xml  --numprocesses 10"
 
 [tool.pylama.linter.pycodestyle]
 max_line_length = 120

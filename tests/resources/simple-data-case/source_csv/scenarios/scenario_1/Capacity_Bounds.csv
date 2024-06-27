@@ -1,0 +1,3 @@
+name,left_technology_name,sense,right_technology_name,left_coeff
+capa_bounds_gens,BOILER_COAL_SF_COAL,EQ,CHP_COAL_KSE,0.7
+capa_bounds_gen_stor,EE_STOR_SF_GAS,LEQ,PV_OS_HP,

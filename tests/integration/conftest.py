@@ -25,27 +25,22 @@ from tests.utils import get_resources
 from zefir_analytics import ZefirEngine
 
 
-@pytest.fixture(scope="session")
-def data_path() -> Path:
-    return get_resources("simple-data-case")
+def data_path(resource_name: str) -> Path:
+    return get_resources(resource_name)
 
 
-@pytest.fixture(scope="session")
 def input_path(data_path: Path) -> Path:
     return data_path / "source_csv"
 
 
-@pytest.fixture(scope="session")
 def parameters_path(data_path: Path) -> Path:
     return data_path / "parameters"
 
 
-@pytest.fixture(scope="session")
 def results_path(data_path: Path) -> Path:
     return data_path / "results"
 
 
-@pytest.fixture(scope="session")
 def parameters(parameters_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     year_sample: np.ndarray = (
         pd.read_csv(parameters_path / "year_sample.csv", header=None)
@@ -65,13 +60,29 @@ def parameters(parameters_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarra
     return year_sample, hour_sample, discount_rate
 
 
+def get_paths_and_data_for_engine(
+    resource_name: str,
+) -> tuple[Path, Path, np.ndarray, np.ndarray, np.ndarray]:
+    resource_path = data_path(resource_name)
+    imp_path = input_path(resource_path)
+    res_path = results_path(resource_path)
+    year_sample, hour_sample, discount_rate = parameters(parameters_path(resource_path))
+    return (imp_path, res_path, year_sample, hour_sample, discount_rate)
+
+
+def get_paths_for_config(resource_name: str) -> tuple[Path, ...]:
+    resource_path = data_path(resource_name)
+    imp_path = input_path(resource_path)
+    res_path = results_path(resource_path)
+    param_path = parameters_path(resource_path)
+    return imp_path, res_path, param_path
+
+
 @pytest.fixture
-def zefir_engine(
-    input_path: Path,
-    results_path: Path,
-    parameters: tuple[np.ndarray, np.ndarray, np.ndarray],
-) -> Generator[ZefirEngine, None, None]:
-    year_sample, hour_sample, discount_rate = parameters
+def zefir_engine() -> Generator[ZefirEngine, None, None]:
+    input_path, results_path, year_sample, hour_sample, discount_rate = (
+        get_paths_and_data_for_engine("simple-data-case")
+    )
     ze = ZefirEngine(
         source_path=input_path,
         result_path=results_path / "csv",
@@ -80,5 +91,23 @@ def zefir_engine(
         hour_sample=hour_sample,
         discount_rate=discount_rate,
         used_hourly_scale=True,
+    )
+    yield ze
+
+
+@pytest.fixture
+def zefir_engine_n_sampled() -> Generator[ZefirEngine, None, None]:
+    input_path, results_path, year_sample, hour_sample, discount_rate = (
+        get_paths_and_data_for_engine("simple-nsample-case")
+    )
+    ze = ZefirEngine(
+        source_path=input_path,
+        result_path=results_path / "csv",
+        scenario_name="scenario_1",
+        year_sample=year_sample,
+        hour_sample=hour_sample,
+        discount_rate=discount_rate,
+        used_hourly_scale=True,
+        n_years_aggregation=2,
     )
     yield ze

@@ -20,14 +20,17 @@ from typing import Self
 import numpy as np
 import pandas as pd
 from pyzefir.model.network import Network
+from pyzefir.model.network_aggregator import NetworkAggregator
 from pyzefir.optimization.opt_config import OptConfig
 from pyzefir.postprocessing.results_handler import GeneralResultDirectory
 from pyzefir.utils.config_parser import ConfigLoader
 
 from zefir_analytics import _engine as _d
+from zefir_analytics._engine.data_queries.utils import GeneratorCapacityCostLabel
 
 
 class ZefirEngine:
+
     def __init__(
         self,
         source_path: Path,
@@ -37,7 +40,12 @@ class ZefirEngine:
         year_sample: np.ndarray[int],
         hour_sample: np.ndarray[int],
         used_hourly_scale: bool,
+        generator_capacity_cost: str = "brutto",
+        n_years_aggregation: int = 1,
     ) -> None:
+        self._generator_capacity_cost_label = self._validate_capacity_cost(
+            generator_capacity_cost
+        )
         self._scenario_name = scenario_name
         self._year_sample = self._validate_parameter_array(
             year_sample, np.int64, "year_sample"
@@ -58,6 +66,22 @@ class ZefirEngine:
             result_path=result_path,
             scenario_name=scenario_name,
         )
+        self._years_binding = None
+
+        if n_years_aggregation > 1:
+            aggregator = NetworkAggregator(
+                n_years=self._network.constants.n_years,
+                n_years_aggregation=n_years_aggregation,
+                year_sample=self._year_sample,
+            )
+
+            aggregator.aggregate_network(self._network)
+            self._years_binding = aggregator.get_years_binding()
+
+            self._year_sample = self._validate_parameter_array(
+                self._years_binding.index.to_numpy(), np.int64, "year_sample"
+            )
+
         self._opt_config = OptConfig(
             hours=self._network.constants.n_hours,
             years=self._network.constants.n_years,
@@ -76,6 +100,8 @@ class ZefirEngine:
             discount_rate=self._discount_rate,
             hourly_scale=self._opt_config.hourly_scale,
             hour_sample=self._opt_config.hour_sample,
+            generator_capacity_cost_label=self._generator_capacity_cost_label,
+            years_binding=self._years_binding,
         )
 
         self._line_parameters_over_years = _d.LineParametersOverYearsQuery(
@@ -83,6 +109,7 @@ class ZefirEngine:
             line_results=self.result_dict[GeneralResultDirectory.LINES_RESULTS],
             hourly_scale=self._opt_config.hourly_scale,
             hour_sample=self._opt_config.hour_sample,
+            years_binding=self._years_binding,
         )
 
         self._aggregated_consumer_parameters_over_years = (
@@ -91,6 +118,7 @@ class ZefirEngine:
                 fraction_results=self.result_dict[
                     GeneralResultDirectory.FRACTIONS_RESULTS
                 ],
+                years_binding=self._years_binding,
             )
         )
         self._variability_of_lbs = _d.LbsParametersOverYearsQuery(
@@ -102,6 +130,7 @@ class ZefirEngine:
                 GeneralResultDirectory.GENERATORS_RESULTS
             ],
             storage_results=self.result_dict[GeneralResultDirectory.STORAGES_RESULTS],
+            years_binding=self._years_binding,
         )
 
     @classmethod
@@ -120,6 +149,8 @@ class ZefirEngine:
             year_sample=config.year_sample,
             hour_sample=config.hour_sample,
             used_hourly_scale=config.use_hourly_scale,
+            generator_capacity_cost=config.network_config["generator_capacity_cost"],
+            n_years_aggregation=config.n_years_aggregation,
         )
 
     @property
@@ -137,6 +168,10 @@ class ZefirEngine:
     @property
     def result_dict(self) -> dict[str, dict[str, dict[str, pd.DataFrame]]]:
         return self._result_dict
+
+    @property
+    def generator_capacity_cost(self) -> str:
+        return self._generator_capacity_cost_label.value
 
     @property
     def source_params(self) -> _d.SourceParametersOverYearsQuery:
@@ -188,3 +223,17 @@ class ZefirEngine:
                 f"Elements of the array {attr_name} must be of type {dtype.__name__}"
             )
         return array
+
+    @staticmethod
+    def _validate_capacity_cost(
+        generator_capacity_cost: str,
+    ) -> GeneratorCapacityCostLabel:
+        if (
+            generator_capacity_cost
+            not in GeneratorCapacityCostLabel.__members__.values()
+        ):
+            raise ValueError(
+                f"Invalid generator_capacity_cost: {generator_capacity_cost}. "
+                f"Must be one of {sorted([item.value for item in GeneratorCapacityCostLabel])}"
+            )
+        return GeneratorCapacityCostLabel(generator_capacity_cost)

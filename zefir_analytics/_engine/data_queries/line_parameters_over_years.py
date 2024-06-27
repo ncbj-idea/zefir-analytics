@@ -23,30 +23,32 @@ from zefir_analytics._engine.data_queries import utils as data_utils
 
 
 class LineParametersOverYearsQuery:
+
     def __init__(
         self,
         network: Network,
         line_results: dict[str, dict[str, pd.DataFrame]],
         hour_sample: np.ndarray,
         hourly_scale: float,
+        years_binding: pd.Series | None = None,
     ) -> None:
         self._network = network
         self._line_results = line_results
         self._hourly_scale = hourly_scale
         self._hour_sample = hour_sample
+        self._years_binding = years_binding
 
     @property
     def line_names(self) -> list[str]:
         return list(self._line_results["flow"].keys())
 
-    @staticmethod
     def _get_yearly_summary(
-        df: pd.DataFrame, column_name: str, operation: str
+        self, df: pd.DataFrame, column_name: str, operation: str
     ) -> pd.DataFrame:
         df = df.agg(axis=0, func=operation).to_frame(column_name)
         df.index.name = YEARS_LABEL
         df.index = df.index.astype(int)
-        return df
+        return data_utils.handle_n_sample_results(df, self._years_binding)
 
     def _get_flow(self, line_name: str) -> pd.DataFrame:
         return (
@@ -60,7 +62,10 @@ class LineParametersOverYearsQuery:
         df = self._line_results["flow"][line_name]
         df.columns = df.columns.astype(int)
         df = df.rename_axis(YEARS_LABEL, axis="columns")
-        return df.T.stack().to_frame("Total energy volume")
+        df = df.T.stack().to_frame("Total energy volume")
+        return data_utils.handle_n_sample_results(
+            df, self._years_binding, is_multiindex=True
+        )
 
     def _get_transmission_fee(self, line_name: str) -> pd.DataFrame:
         df_flow = self._line_results["flow"][line_name]

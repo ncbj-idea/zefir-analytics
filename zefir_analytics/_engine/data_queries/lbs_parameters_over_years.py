@@ -24,17 +24,20 @@ from zefir_analytics._engine.data_queries import utils as data_utils
 
 
 class LbsParametersOverYearsQuery:
+
     def __init__(
         self,
         network: Network,
         fractions_results: dict[str, dict[str, pd.DataFrame]],
         generator_results: dict[str, dict[str, pd.DataFrame]],
         storage_results: dict[str, dict[str, pd.DataFrame]],
+        years_binding: pd.Series | None = None,
     ) -> None:
         self._network = network
         self._fractions_results = fractions_results
         self._generator_results = generator_results
         self._storage_results = storage_results
+        self._years_binding = years_binding
 
     @property
     def lbs_names(self) -> list[str]:
@@ -45,7 +48,9 @@ class LbsParametersOverYearsQuery:
         }
         return list(lbs_names)
 
-    def _get_lbs_fraction(self, lbs_name: str) -> pd.DataFrame:
+    def _get_lbs_fraction(
+        self, lbs_name: str, is_year_binding: bool = True
+    ) -> pd.DataFrame:
         df = pd.DataFrame(
             {
                 key: df[lbs_name]
@@ -57,6 +62,8 @@ class LbsParametersOverYearsQuery:
             for agg in df.columns:
                 if lbs_name in self._network.aggregated_consumers[agg].available_stacks:
                     return pd.DataFrame({agg: np.zeros(len(df.index))}, index=df.index)
+        if self._years_binding is not None and is_year_binding:
+            return data_utils.handle_n_sample_results(df_filtered, self._years_binding)
         return df_filtered
 
     def _get_lbs_capacity(self, lbs_name: str) -> pd.DataFrame:
@@ -66,7 +73,9 @@ class LbsParametersOverYearsQuery:
         df_stor = self._storage_results["capacity"]["capacity"][storage_attach]
         df_gen = df_gen.div(fraction_factor, axis=0).fillna(0.0).replace(np.inf, 0.0)
         df_stor = df_stor.div(fraction_factor, axis=0).fillna(0.0).replace(np.inf, 0.0)
-        return pd.concat([df_gen, df_stor], axis=1)
+        return data_utils.handle_n_sample_results(
+            pd.concat([df_gen, df_stor], axis=1), self._years_binding
+        )
 
     def _get_attached_sources(self, lbs_name: str) -> tuple[list[str], list[str]]:
         buses_attached = [
@@ -90,7 +99,7 @@ class LbsParametersOverYearsQuery:
         return generators, storages
 
     def _get_fraction_factor(self, lbs_name: str) -> np.ndarray:
-        df_fraction = self._get_lbs_fraction(lbs_name)
+        df_fraction = self._get_lbs_fraction(lbs_name, False)
         df_fraction = df_fraction.loc[:, (df_fraction != 0.0).any()]
         if df_fraction.empty:
             return np.zeros(len(df_fraction.index))

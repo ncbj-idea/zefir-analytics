@@ -21,16 +21,14 @@ from pathlib import Path
 import pytest
 from pandas.testing import assert_frame_equal
 
+from tests.integration.conftest import get_paths_for_config
 from zefir_analytics.zefir_engine import ZefirEngine
 
 
 @pytest.fixture
-def config_parser(
-    input_path: Path,
-    results_path: Path,
-    parameters_path: Path,
-) -> configparser.ConfigParser:
+def config_parser() -> configparser.ConfigParser:
     """Simple configuration file for pipeline test run."""
+    input_path, results_path, parameters_path = get_paths_for_config("simple-data-case")
     config = configparser.ConfigParser()
     config.read_dict(
         {
@@ -51,6 +49,7 @@ def config_parser(
                 "binary_fraction": False,
                 "money_scale": 100.0,
                 "use_hourly_scale": True,
+                "generator_capacity_cost": "brutto",
             },
         }
     )
@@ -58,12 +57,9 @@ def config_parser(
 
 
 @pytest.fixture
-def xlsx_config_parser(
-    input_path: Path,
-    results_path: Path,
-    parameters_path: Path,
-) -> configparser.ConfigParser:
+def xlsx_config_parser() -> configparser.ConfigParser:
     """Simple configuration file for pipeline test run."""
+    input_path, results_path, parameters_path = get_paths_for_config("simple-data-case")
     config = configparser.ConfigParser()
     config.read_dict(
         {
@@ -85,6 +81,7 @@ def xlsx_config_parser(
                 "binary_fraction": False,
                 "money_scale": 100.0,
                 "use_hourly_scale": True,
+                "generator_capacity_cost": "brutto",
             },
         }
     )
