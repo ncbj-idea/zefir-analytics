@@ -26,9 +26,8 @@ def test_source_parameters_over_years(zefir_engine: ZefirEngine) -> None:
         ze.source_params.get_local_capex_opex(),
         ze.source_params.get_global_capex_opex(level="type"),
         ze.source_params.get_global_capex_opex(level="element"),
-        ze.source_params.get_ets_cost(level="element"),
+        ze.source_params.get_emission_fee_total_cost(level="element"),
         ze.source_params.get_state_of_charge(level="element"),
-        ze.source_params.get_ens(),
         ze.source_params.get_generation_sum(level="element"),
         ze.source_params.get_dump_energy_sum(level="element"),
         ze.source_params.get_global_capex_opex(level="type"),
@@ -51,17 +50,11 @@ def test_source_parameters_over_years(zefir_engine: ZefirEngine) -> None:
         ze.source_params.get_state_of_charge(
             level="type", filter_type="aggr", filter_names=["MULTI_FAMILY"]
         ),
-        ze.source_params.get_network_costs_per_tech_type(
-            level="element", filter_type="aggr"
-        ),
+        ze.source_params.get_network_costs_per_tech_type(),
         ze.source_params.get_network_fuel_cost(),
         ze.source_params.get_network_fuel_availability(),
-        ze.source_params.get_ets_cost(
-            level="type", filter_type="aggr", filter_names=["MULTI_FAMILY"]
-        ),
-        ze.source_params.get_ens(filter_type="aggr", filter_names=["MULTI_FAMILY"]),
-        ze.source_params.get_ens(
-            filter_type="bus", filter_names=["MF_BASIC_EE", "MF_HP_EE"]
+        ze.source_params.get_emission_fee_total_cost(
+            level="type", filter_names=["CHP_COAL"]
         ),
     ]
     assert len(zefir_results)
@@ -146,7 +139,6 @@ def test_cap_plus_calculation(zefir_engine: ZefirEngine) -> None:
 def test_source_parameters_over_years_and_hours(zefir_engine: ZefirEngine) -> None:
     ze = zefir_engine
     zefir_results_without_filters = [
-        ze.source_params.get_ens(is_hours_resolution=True),
         ze.source_params.get_state_of_charge(level="type", is_hours_resolution=True),
         ze.source_params.get_generation_sum(level="element", is_hours_resolution=True),
         ze.source_params.get_dump_energy_sum(level="element", is_hours_resolution=True),
@@ -164,9 +156,6 @@ def test_source_parameters_over_years_and_hours(zefir_engine: ZefirEngine) -> No
             filter_type="aggr",
             filter_names=["MULTI_FAMILY"],
             is_hours_resolution=True,
-        ),
-        ze.source_params.get_ens(
-            filter_type="aggr", filter_names=["MULTI_FAMILY"], is_hours_resolution=True
         ),
         ze.source_params.get_generation_sum(
             level="type",

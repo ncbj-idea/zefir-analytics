@@ -34,6 +34,7 @@ from enum import StrEnum, auto
 from typing import Callable, TypeVar
 
 import pandas as pd
+from pyzefir.model.network import Network
 
 T = TypeVar("T")
 
@@ -54,15 +55,12 @@ def argument_condition(
 def dict_filter(
     dictionary: dict[str, T], keys: list[str] | str | None
 ) -> dict[str, T] | T:
-    return (
-        dictionary
-        if keys is None
-        else (
-            dictionary[keys]
-            if isinstance(keys, str)
-            else {key: dictionary[key] for key in keys}
-        )
-    )
+    if keys is None:
+        return dictionary
+    elif isinstance(keys, str):
+        return dictionary.get(keys, {})
+    else:
+        return {key: dictionary[key] for key in keys if key in dictionary}
 
 
 def assign_multiindex(df: pd.DataFrame, label: str) -> pd.DataFrame:
@@ -106,3 +104,11 @@ def handle_n_sample_results(
         if is_multiindex:
             return reindex_multiindex_df_binding_years(results, year_binding)
         return reindex_single_df_binding_years(results, year_binding)
+
+
+def get_generators_emission_types(network: Network) -> dict[str, set[str]]:
+    return {
+        key: obj.emission_fee
+        for key, obj in network.generators.items()
+        if obj.emission_fee
+    }

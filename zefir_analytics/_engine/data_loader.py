@@ -46,8 +46,14 @@ class DataLoader:
     ]:
         source_data = cls._load_source_data(source_path, scenario_name)
         network = cls._create_network(source_data)
-        result_data = cls._load_result_data(result_path)
-        objective_func_value = cls._load_objective_function_value(result_path)
+        if result_path.name == "feather":
+            result_data = cls._load_feather_result_data(result_path)
+            objective_func_value = cls._load_objective_function_from_feather(
+                result_path
+            )
+        else:
+            result_data = cls._load_csv_result_data(result_path)
+            objective_func_value = cls._load_objective_function_from_csv(result_path)
 
         return source_data, network, result_data, objective_func_value
 
@@ -68,13 +74,18 @@ class DataLoader:
         return NetworkCreator.create(df_dict)
 
     @classmethod
-    def _load_objective_function_value(cls, result_path: Path) -> float:
+    def _load_objective_function_from_csv(cls, result_path: Path) -> float:
         return pd.read_csv(
-            result_path / OBJECTIVE_FUNCTION_FILE_NAME, index_col=0
+            result_path / f"{OBJECTIVE_FUNCTION_FILE_NAME}.csv", index_col=0
         ).squeeze()
 
     @classmethod
-    def _load_result_data(
+    def _load_objective_function_from_feather(cls, result_path: Path) -> float:
+        df = pd.read_feather(result_path / f"{OBJECTIVE_FUNCTION_FILE_NAME}.feather")
+        return df.set_index("index").squeeze()
+
+    @classmethod
+    def _load_csv_result_data(
         cls,
         result_path: Path,
     ) -> dict[str, dict[str, dict[str, pd.DataFrame]]]:
@@ -95,4 +106,29 @@ class DataLoader:
                         result_dict[group_str][data_category.stem][
                             csv_file.stem
                         ] = objective_func_df
+        return result_dict
+
+    @classmethod
+    def _load_feather_result_data(
+        cls,
+        result_path: Path,
+    ) -> dict[str, dict[str, dict[str, pd.DataFrame]]]:
+        result_dict: dict[str, dict[str, dict[str, pd.DataFrame]]] = dict()
+        for group in GeneralResultDirectory:
+            group_str = group.value  # noqa
+            group_path = result_path / group_str
+            result_dict[group_str] = dict()
+            for data_category in group_path.glob("*"):
+                result_dict[group_str][data_category.stem] = dict()
+                for feather_file in data_category.glob("*.feather"):
+                    objective_func_df = pd.read_feather(feather_file)
+                    df = objective_func_df.set_index(objective_func_df.columns[0])
+                    if group_str == GeneralResultDirectory.LINES_RESULTS:
+                        result_dict[group_str][data_category.stem][
+                            feather_file.stem.replace("-", "->")
+                        ] = df
+                    else:
+                        result_dict[group_str][data_category.stem][
+                            feather_file.stem
+                        ] = df
         return result_dict

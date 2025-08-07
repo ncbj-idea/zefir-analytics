@@ -47,14 +47,28 @@ def test_source_parameters_n_sample_over_years(
         ze.source_params.get_fuel_usage(**source_params_condition),
         ze.source_params.get_emission(**source_params_condition),
         ze.source_params.get_fuel_cost(**source_params_condition),
-        ze.source_params.get_network_costs_per_tech_type(**source_params_condition),
-        ze.source_params.get_ets_cost(**source_params_condition),
         ze.source_params.get_state_of_charge(**source_params_condition),
     ]
     if "filter_type" not in source_params_condition:
-        results.append(
-            ze.source_params.get_global_capex_opex(**source_params_condition)
+        results.extend(
+            [
+                ze.source_params.get_global_capex_opex(**source_params_condition),
+                ze.source_params.get_emission_fee_total_cost(**source_params_condition),
+                ze.source_params.get_emission_fee_total_cost(**source_params_condition),
+            ]
         )
+    assert_analytics_result(results)
+
+
+def test_source_parameters_n_sample_network_plots(
+    zefir_engine_n_sampled: ZefirEngine,
+) -> None:
+    ze = zefir_engine_n_sampled
+    results = [
+        ze.source_params.get_network_costs_per_tech_type(),
+        ze.source_params.get_network_fuel_cost(),
+        ze.source_params.get_network_fuel_availability(),
+    ]
     assert_analytics_result(results)
 
 
@@ -66,7 +80,6 @@ def test_source_parameters_n_sample_without_required_args(
         ze.source_params.get_local_capex_opex(),
         ze.source_params.get_network_fuel_cost(),
         ze.source_params.get_network_fuel_availability(),
-        ze.source_params.get_ens(),
     ]
     assert_analytics_result(results)
 
@@ -89,8 +102,6 @@ def test_source_parameters_n_sample_over_years_filter_empty_aggr(
         ze.source_params.get_fuel_usage(**setup),
         ze.source_params.get_emission(**setup),
         ze.source_params.get_fuel_cost(**setup),
-        ze.source_params.get_network_costs_per_tech_type(**setup),
-        ze.source_params.get_ets_cost(**setup),
         ze.source_params.get_state_of_charge(**setup),
     ]
     assert len(zefir_results)
@@ -106,7 +117,6 @@ def test_source_parameters_n_sample_over_years_hourly_resolution(
         ze.source_params.get_load_sum(level="type", is_hours_resolution=True),
         ze.source_params.get_generation_demand(level="type", is_hours_resolution=True),
         ze.source_params.get_fuel_usage(level="type", is_hours_resolution=True),
-        ze.source_params.get_ens(is_hours_resolution=True),
         ze.source_params.get_state_of_charge(level="type", is_hours_resolution=True),
     ]
     assert_analytics_result(results)

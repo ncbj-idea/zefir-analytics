@@ -44,7 +44,9 @@ class AggregatedConsumerParametersOverYearsQuery:
         df_dict = data_utils.dict_filter(
             dictionary=dict(self._fraction_results[FRACTION_RESULTS_KEY]),
             keys=aggregated_consumers_names,
-        ).copy()
+        )
+        if isinstance(df_dict, dict) and not df_dict:
+            return pd.DataFrame()
         return data_utils.handle_n_sample_results(df_dict, self._years_binding)
 
     def get_n_consumers(
@@ -54,6 +56,8 @@ class AggregatedConsumerParametersOverYearsQuery:
             dictionary=dict(self._network.aggregated_consumers),
             keys=aggregated_consumers_names,
         )
+        if not res:
+            return pd.DataFrame()
         n_consumers = (
             {key: value.n_consumers.rename("N_consumers") for key, value in res.items()}
             if isinstance(res, dict)
@@ -68,6 +72,8 @@ class AggregatedConsumerParametersOverYearsQuery:
             dictionary=dict(self._network.aggregated_consumers),
             keys=aggregated_consumers_names,
         )
+        if not res:
+            return pd.DataFrame()
         yearly_energy_usage = (
             {
                 key: pd.DataFrame(
@@ -91,6 +97,8 @@ class AggregatedConsumerParametersOverYearsQuery:
             dictionary=dict(self._network.aggregated_consumers),
             keys=aggregated_consumers_names,
         )
+        if not res:
+            return pd.DataFrame()
         total_yearly_energy_usage = (
             {
                 key: pd.DataFrame(
@@ -120,6 +128,8 @@ class AggregatedConsumerParametersOverYearsQuery:
             dictionary=dict(self._network.aggregated_consumers),
             keys=aggregated_consumers_names,
         )
+        if not res:
+            return pd.DataFrame()
         if isinstance(res, dict):
             dfs = [
                 self._create_aggregate_parameters_dataframe(agg) for agg in res.values()
@@ -161,7 +171,7 @@ class AggregatedConsumerParametersOverYearsQuery:
                 self._get_single_aggregate_elements_type_attachments_dataframe(agg_name)
                 for agg_name in aggregated_consumers_names
             ]
-            return pd.concat(dfs).fillna(0)
+            return pd.concat(dfs).fillna(0).astype("int64")
         else:
             return self._get_single_aggregate_elements_type_attachments_dataframe(
                 aggregated_consumers_names
@@ -170,6 +180,8 @@ class AggregatedConsumerParametersOverYearsQuery:
     def _get_single_aggregate_elements_type_attachments_dataframe(
         self, aggregate_name: str
     ) -> pd.DataFrame:
+        if aggregate_name not in self._network.aggregated_consumers:
+            return pd.DataFrame()
         agg = self._network.aggregated_consumers[aggregate_name]
         dfs: list[pd.DataFrame] = []
         for lbs_name in agg.available_stacks:
@@ -195,7 +207,7 @@ class AggregatedConsumerParametersOverYearsQuery:
             )
 
             dfs.append(df)
-        return pd.concat(dfs).fillna(0)
+        return pd.concat(dfs).fillna(0).astype("int64")
 
     def _get_unique_element_type_from_buses(self, buses: set[str]) -> set[str]:
         unique_types = set()

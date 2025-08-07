@@ -51,14 +51,18 @@ class LineParametersOverYearsQuery:
         return data_utils.handle_n_sample_results(df, self._years_binding)
 
     def _get_flow(self, line_name: str) -> pd.DataFrame:
-        return (
-            self._get_yearly_summary(
-                self._line_results["flow"][line_name], "Total energy volume", "sum"
+        if line_name in self._line_results["flow"]:
+            return (
+                self._get_yearly_summary(
+                    self._line_results["flow"][line_name], "Total energy volume", "sum"
+                )
+                * self._hourly_scale
             )
-            * self._hourly_scale
-        )
+        return pd.DataFrame()
 
     def _get_flow_hourly(self, line_name: str) -> pd.DataFrame:
+        if line_name not in self._line_results["flow"]:
+            return pd.DataFrame()
         df = self._line_results["flow"][line_name]
         df.columns = df.columns.astype(int)
         df = df.rename_axis(YEARS_LABEL, axis="columns")
@@ -68,6 +72,8 @@ class LineParametersOverYearsQuery:
         )
 
     def _get_transmission_fee(self, line_name: str) -> pd.DataFrame:
+        if line_name not in self._line_results["flow"]:
+            return pd.DataFrame()
         df_flow = self._line_results["flow"][line_name]
         if tf_name := self._network.lines[line_name].transmission_fee:
             series_tf = (
@@ -100,13 +106,6 @@ class LineParametersOverYearsQuery:
             data_utils.argument_condition(line_name, self._get_flow)
             if line_name is not None
             else data_utils.argument_condition(self.line_names, self._get_flow)
-        )
-
-    def get_capacity(
-        self, line_name: str | list[str] | None = None
-    ) -> pd.DataFrame | dict[str, pd.DataFrame]:
-        raise NotImplementedError(
-            "This method will be implemented later when basecode will be ready"
         )
 
     def get_transmission_fee(

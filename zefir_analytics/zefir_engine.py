@@ -67,11 +67,11 @@ class ZefirEngine:
             scenario_name=scenario_name,
         )
         self._years_binding = None
-
-        if n_years_aggregation > 1:
+        self._n_years_aggregation = n_years_aggregation
+        if self._n_years_aggregation > 1:
             aggregator = NetworkAggregator(
                 n_years=self._network.constants.n_years,
-                n_years_aggregation=n_years_aggregation,
+                n_years_aggregation=self._n_years_aggregation,
                 year_sample=self._year_sample,
             )
 
@@ -136,14 +136,18 @@ class ZefirEngine:
     @classmethod
     def create_from_config(cls, config_path: Path) -> Self:
         config = ConfigLoader(config_path).load()
+        result_path = config.output_path / "csv"
         match config.input_format:
             case "csv":
                 source_path = config.input_path
             case "xlsx":
                 source_path = config.csv_dump_path
+            case "feather":
+                source_path = config.csv_dump_path
+                result_path = config.output_path / "feather"
         return cls(
             source_path=source_path,
-            result_path=config.output_path / "csv",
+            result_path=result_path,
             scenario_name=config.scenario,
             discount_rate=config.discount_rate,
             year_sample=config.year_sample,
